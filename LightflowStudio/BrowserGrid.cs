@@ -39,6 +39,7 @@ internal sealed class BrowserGridTile : INotifyPropertyChanged
     private int _index;
     private DateTime? _captureDate;
     private double? _durationSeconds;
+    private BrowserAssetState _assetState;
 
     public BrowserGridTile(MediaFolderEntry entry, int index)
     {
@@ -122,12 +123,34 @@ internal sealed class BrowserGridTile : INotifyPropertyChanged
 
     public bool HasThumbnail => _thumbnailPath is not null;
 
+    /// <summary>Durable, user-authored Catalog state projected for Browser presentation; never Preview state.</summary>
+    public BrowserAssetState AssetState
+    {
+        get => _assetState;
+        private set
+        {
+            if (_assetState == value) return;
+            _assetState = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUserAuthoredState));
+            OnPropertyChanged(nameof(AssetStateLabel));
+        }
+    }
+
+    public bool HasUserAuthoredState => AssetState != BrowserAssetState.None;
+
+    public string AssetStateLabel => AssetState.HasFlag(BrowserAssetState.ReviewRange)
+        ? "Saved In/Out range"
+        : "User-authored asset state";
+
     public void SetAssetId(Guid assetId)
     {
         if (AssetId == assetId) return;
         AssetId = assetId;
         OnPropertyChanged(nameof(AssetId));
     }
+
+    public void SetAssetState(BrowserAssetState state) => AssetState = state;
 
     /// <summary>Applies a metadata probe result in place. Returns true if either sortable value actually changed, so callers can coalesce a re-sort.</summary>
     public bool ApplyMetadata(DateTime? captureDate, double? durationSeconds)
@@ -466,6 +489,17 @@ internal sealed class BrowserGridModel
     /// </summary>
     public bool ApplyMetadata(Guid assetId, DateTime? captureDate, double? durationSeconds) =>
         _tilesByAsset.TryGetValue(assetId, out var tile) && tile.ApplyMetadata(captureDate, durationSeconds);
+
+    /// <summary>Updates Catalog-backed presentation state in place without rebuilding rows or thumbnails.</summary>
+    public void ApplyAssetState(Guid assetId, BrowserAssetState state)
+    {
+        if (_tilesByAsset.TryGetValue(assetId, out var tile)) tile.SetAssetState(state);
+    }
+
+    public void ApplyAssetStates(IReadOnlyDictionary<Guid, BrowserAssetState> states)
+    {
+        foreach (var (assetId, state) in states) ApplyAssetState(assetId, state);
+    }
 
     public void SetColumns(int columns)
     {

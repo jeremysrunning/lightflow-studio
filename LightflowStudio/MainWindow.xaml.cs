@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     private static readonly double[] FrameRateValues = [0, 23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
     private static readonly int[] AudioSampleRates = [0, 44100, 48000, 96000];
     private long _browserUiGeneration;
+    private long _browserAssetStateRevision;
     private bool _synchronizingBrowserTree;
     /// <summary>The node most recently targeted by a passive (non-interactive) tree reveal, consumed by <see cref="BrowserFolderTree_SelectedItemChanged"/> the first time a matching event arrives. See that method's doc comment.</summary>
     private BrowserTreeNode? _browserTreeRevealedNode;
@@ -1003,6 +1004,8 @@ public partial class MainWindow : Window
         _browserGrid.Populate(state.RecursiveMediaEntries ?? directFiles);
         UpdateBrowserGridColumns();
         if (state.DerivedWork is { } batch) _browserGrid.ApplyAssetIdentities(batch.Reconciliation.Items);
+        if (state.DerivedWork is { } stateBatch)
+            _ = LoadBrowserAssetStatesAsync(stateBatch.Reconciliation.Items, _browserUiGeneration, _browserAssetStateRevision);
         AttachBrowserDerivedWork(state.DerivedWork, _browserUiGeneration);
         BrowserCurrentPath.Text = state.Location?.DisplayPath ?? "";
         BrowserBackButton.IsEnabled = state.CanGoBack;
@@ -1047,6 +1050,19 @@ public partial class MainWindow : Window
             _workspaceSaveTimer.Stop();
             _workspaceSaveTimer.Start();
         }
+    }
+
+    private async Task LoadBrowserAssetStatesAsync(IReadOnlyList<CatalogReconciliationItem> items, long generation, long revision)
+    {
+        try
+        {
+            var states = await _storage.BrowserAssetStates.GetAsync(items.Select(item => item.AssetId).ToArray())
+                .ConfigureAwait(true);
+            if (generation == _browserUiGeneration && revision == _browserAssetStateRevision)
+                _browserGrid.ApplyAssetStates(states);
+        }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException) { }
     }
 
     private const string BrowserIncludeSubfoldersDefaultToolTip =
@@ -1275,6 +1291,11 @@ public partial class MainWindow : Window
         _playerViewerHost = new PlayerViewerHost(App.Playback, _storage.MediaRanges,
             new FrameScreengrabService(() => _storage.Settings.ScreengrabDirectory));
         _playerViewerHost.BackRequested += (_, _) => _ = ReturnToBrowserGridAsync();
+        _playerViewerHost.AssetStateChanged += (_, change) =>
+        {
+            _browserAssetStateRevision++;
+            _browserGrid.ApplyAssetState(change.AssetId, change.State);
+        };
         BrowserPlayerHost.Content = _playerViewerHost;
     }
 

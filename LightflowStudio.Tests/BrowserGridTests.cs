@@ -205,6 +205,51 @@ public sealed class BrowserGridTests
     }
 
     [Fact]
+    public void ApplyAssetState_UpdatesOnlyTheMatchingTileWithoutChangingItsThumbnail()
+    {
+        var model = new BrowserGridModel();
+        var rootId = Guid.NewGuid();
+        var entryA = Image(rootId, "a.jpg");
+        var entryB = Image(rootId, "b.jpg");
+        var assetA = Guid.NewGuid();
+        var assetB = Guid.NewGuid();
+        model.Populate([entryA, entryB]);
+        model.ApplyAssetIdentities([
+            new(assetA, entryA.RelativePath, CatalogReconciliationItemStatus.New),
+            new(assetB, entryB.RelativePath, CatalogReconciliationItemStatus.New)]);
+        model.ApplyThumbnail(assetA, @"C:\previews\a.jpg");
+
+        model.ApplyAssetState(assetA, BrowserAssetState.ReviewRange);
+
+        var tileA = model.Tiles.Single(tile => tile.Name == "a.jpg");
+        var tileB = model.Tiles.Single(tile => tile.Name == "b.jpg");
+        Assert.True(tileA.HasUserAuthoredState);
+        Assert.Equal("Saved In/Out range", tileA.AssetStateLabel);
+        Assert.Equal(@"C:\previews\a.jpg", tileA.ThumbnailPath);
+        Assert.False(tileB.HasUserAuthoredState);
+    }
+
+    [Fact]
+    public void ApplyAssetState_ClearingAllStateRemovesTheIndicatorAndSurvivesRefreshInPlace()
+    {
+        var model = new BrowserGridModel();
+        var rootId = Guid.NewGuid();
+        var entry = Video(rootId, "clip.mp4");
+        var assetId = Guid.NewGuid();
+        model.Populate([entry]);
+        model.ApplyAssetIdentities([new(assetId, entry.RelativePath, CatalogReconciliationItemStatus.New)]);
+        model.ApplyAssetState(assetId, BrowserAssetState.ReviewRange);
+        var original = model.Tiles.Single();
+
+        model.Populate([Video(rootId, "clip.mp4")]);
+        model.ApplyAssetState(assetId, BrowserAssetState.None);
+
+        Assert.Same(original, model.Tiles.Single());
+        Assert.False(original.HasUserAuthoredState);
+        Assert.Equal(BrowserAssetState.None, original.AssetState);
+    }
+
+    [Fact]
     public void HasThumbnail_ReflectsAppliedStateForKnownAssetsOnly()
     {
         var model = new BrowserGridModel();

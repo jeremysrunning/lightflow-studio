@@ -101,6 +101,44 @@ public sealed class CatalogDatabaseTests : IDisposable
     }
 
     [Fact]
+    public async Task BrowserAssetStateStore_ProjectsSavedRangesForRequestedAssetsAndClearsThem()
+    {
+        var result = await CreateService().CreateNewAsync();
+        var session = result.Session!;
+        var rootId = InsertRoot(session, "Archive");
+        var marked = InsertAsset(session, rootId, "marked.mp4", "marked.mp4");
+        var unmarked = InsertAsset(session, rootId, "unmarked.mp4", "unmarked.mp4");
+        var ranges = new CatalogMediaRangeStore(() => session);
+        var states = new CatalogBrowserAssetStateStore(() => session);
+        await ranges.SaveAsync(marked, new MediaRange(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5)));
+
+        var projected = await states.GetAsync([marked, unmarked]);
+
+        Assert.Equal(BrowserAssetState.ReviewRange, projected[marked]);
+        Assert.Equal(BrowserAssetState.None, projected[unmarked]);
+
+        await ranges.SaveAsync(marked, null);
+        projected = await states.GetAsync([marked]);
+        Assert.Equal(BrowserAssetState.None, projected[marked]);
+        await session.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task BrowserAssetStateStore_BatchesLargeRequestedSetsWithoutSqliteParameterOverflow()
+    {
+        var result = await CreateService().CreateNewAsync();
+        var session = result.Session!;
+        var store = new CatalogBrowserAssetStateStore(() => session);
+        var requested = Enumerable.Range(0, 1200).Select(_ => Guid.NewGuid()).ToArray();
+
+        var projected = await store.GetAsync(requested);
+
+        Assert.Equal(requested.Length, projected.Count);
+        Assert.All(projected.Values, state => Assert.Equal(BrowserAssetState.None, state));
+        await session.DisposeAsync();
+    }
+
+    [Fact]
     public async Task ExistingVersionZeroCatalog_MigratesOnlyAfterBackupApproval()
     {
         var locations = CreateLocations();

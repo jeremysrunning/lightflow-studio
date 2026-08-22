@@ -100,6 +100,7 @@ internal sealed class LightflowStorageCoordinator : IAsyncDisposable
         RecursiveMediaDiscovery = new RecursiveMediaDiscoveryService(MediaFolders, MediaDiscovery);
         MediaMonitoring = new MediaRootMonitoringService(MediaRoots, MediaDiscovery);
         MediaRanges = new CatalogMediaRangeStore(() => _catalogSession);
+        BrowserAssetStates = new CatalogBrowserAssetStateStore(() => _catalogSession);
     }
 
     public AppSettings Settings { get; private set; }
@@ -114,6 +115,7 @@ internal sealed class LightflowStorageCoordinator : IAsyncDisposable
     public IBrowserLocationResolver BrowserLocations { get; }
     public IMediaAssetService MediaAssets { get; }
     public IMediaRangeStore MediaRanges { get; }
+    public IBrowserAssetStateStore BrowserAssetStates { get; }
     /// <summary>#124 (revised): durable Catalog storage for Browser "Include Subfolders" recursive roots. See <see cref="BrowserRecursiveRoot"/>.</summary>
     public IBrowserRecursiveRootService BrowserRecursiveRoots { get; }
     public IMediaTypeRegistry MediaTypes { get; }
